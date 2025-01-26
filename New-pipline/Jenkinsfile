@@ -2,9 +2,9 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = 'surajv/getting-started-app'  // Change to your Docker Hub username/repo
-        KUBE_CONFIG = credentials('kubeconfig-credential-id')  // Replace with your Jenkins credentials ID for Kubernetes config
-        DOCKER_CREDENTIALS = credentials('docker-hub-credentials')  // Replace with your Jenkins credentials ID for Docker Hub
+        DOCKER_IMAGE = 'surajv86/getting-started-app'  // Docker image name
+        KUBE_CONFIG = credentials('kubeconfig-credential-id')  // Kubernetes config credentials ID
+        DOCKER_CREDENTIALS = credentials('docker-hub-credentials')  // Docker Hub credentials ID
     }
 
     stages {
@@ -17,8 +17,7 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 script {
-                    // Install dependencies using Yarn
-                    sh 'yarn install'
+                    sh 'yarn install'  // Ensure Yarn is available on the agent
                 }
             }
         }
@@ -26,8 +25,8 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Build Docker image
-                    sh "docker build -t surajv86/getting-started-app:123 ."
+                    def dockerTag = "${env.BUILD_NUMBER}"  // Use build number as tag
+                    sh "docker build -t ${DOCKER_IMAGE}:${dockerTag} ."
                 }
             }
         }
@@ -35,13 +34,11 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 script {
-                    // Login to Docker Hub
+                    def dockerTag = "${env.BUILD_NUMBER}"
                     withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
                         sh "docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD}"
                     }
-
-                    // Push Docker image to Docker Hub
-                    sh "docker push surajv86/getting-started-app:123"
+                    sh "docker push ${DOCKER_IMAGE}:${dockerTag}"
                 }
             }
         }
@@ -49,8 +46,8 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 script {
-                    // Use kubectl to apply the Kubernetes configuration files
-                    withCredentials([file(credentialsId: 'kube-config', variable: 'KUBE_CONFIG')]) {
+                    def dockerTag = "${env.BUILD_NUMBER}"
+                    withEnv(["KUBECONFIG=${KUBE_CONFIG}"]) {
                         sh 'kubectl apply -f kubernetes/namespace.yml'
                         sh 'kubectl apply -f kubernetes/deployment.yml'
                         sh 'kubectl apply -f kubernetes/service.yml'
@@ -62,8 +59,8 @@ pipeline {
         stage('Cleanup') {
             steps {
                 script {
-                    // Optionally, you can clean up Docker images after deployment
-                    sh "docker rmi $surajv86/getting-started-app:123"
+                    def dockerTag = "${env.BUILD_NUMBER}"
+                    sh "docker rmi ${DOCKER_IMAGE}:${dockerTag}"
                 }
             }
         }
@@ -72,11 +69,11 @@ pipeline {
     post {
         success {
             echo 'Build and deployment were successful!'
-            // Add any post-success actions, like Slack notifications
+            // Add notifications if necessary (e.g., Slack)
         }
         failure {
             echo 'Build or deployment failed!'
-            // Add failure notifications here
+            // Add logs or notification for debugging
         }
     }
 }
